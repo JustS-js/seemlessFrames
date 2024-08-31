@@ -10,8 +10,5 @@ import java.util.concurrent.locks.ReadWriteLock;
 @Mixin(DataTracker.class)
 public interface AccessDataTrackerEntries {
     @Accessor
-    public Int2ObjectMap<DataTracker.Entry<?>> getEntries();
-
-    @Accessor
-    public ReadWriteLock getLock();
+    public DataTracker.Entry<?>[] getEntries();
 }

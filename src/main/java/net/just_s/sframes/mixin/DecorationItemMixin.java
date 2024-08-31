@@ -1,6 +1,8 @@
 package net.just_s.sframes.mixin;
 
 import net.just_s.sframes.SFramesMod;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.entity.decoration.GlowItemFrameEntity;
@@ -44,39 +46,42 @@ public class DecorationItemMixin {
             PlayerEntity playerEntity = context.getPlayer();
             ItemStack itemStack = context.getStack();
 
-            if (playerEntity != null && this.canPlaceOn(playerEntity, direction, itemStack, blockPos2)) {
-                if (this.entityType != EntityType.ITEM_FRAME && this.entityType != EntityType.GLOW_ITEM_FRAME) {
-                    return;
+            if (playerEntity == null) return;
+            if (!this.canPlaceOn(playerEntity, direction, itemStack, blockPos2)) return;
+
+            if (this.entityType != EntityType.ITEM_FRAME && this.entityType != EntityType.GLOW_ITEM_FRAME) return;
+
+            NbtComponent nbtComponent = itemStack.get(DataComponentTypes.CUSTOM_DATA);
+            if (nbtComponent == null) return;
+
+            NbtCompound nbt = nbtComponent.copyNbt();
+
+            if (nbt.contains("invisibleframe")) {
+                World world = context.getWorld();
+                AbstractDecorationEntity frameEntity;
+                if (this.entityType == EntityType.ITEM_FRAME) {
+                    frameEntity = new ItemFrameEntity(world, blockPos2, direction);
+                } else {
+                    frameEntity = new GlowItemFrameEntity(world, blockPos2, direction);
                 }
-                if (!itemStack.hasNbt()) {return;}
-                NbtCompound nbt = itemStack.getNbt();
-                if (nbt.contains("invisibleframe")) {
-                    World world = context.getWorld();
-                    AbstractDecorationEntity frameEntity;
-                    if (this.entityType == EntityType.ITEM_FRAME) {
-                        frameEntity = new ItemFrameEntity(world, blockPos2, direction);
-                    } else {
-                        frameEntity = new GlowItemFrameEntity(world, blockPos2, direction);
+                EntityType.loadFromEntityNbt(world, playerEntity, frameEntity, NbtComponent.of(nbt));
+
+                Team team = world.getScoreboard().getTeam("SeamlessFrames");
+                world.getScoreboard().addScoreHolderToTeam(frameEntity.getNameForScoreboard(), team);
+
+                frameEntity.addCommandTag("invisibleframe");
+
+                if (frameEntity.canStayAttached()) {
+                    if (!world.isClient) {
+                        frameEntity.onPlace();
+                        world.emitGameEvent(playerEntity, GameEvent.ENTITY_PLACE, frameEntity.getPos());
+                        world.spawnEntity(frameEntity);
                     }
-                    EntityType.loadFromEntityNbt(world, playerEntity, frameEntity, nbt);
 
-                    Team team = world.getScoreboard().getTeam("SeamlessFrames");
-                    world.getScoreboard().addPlayerToTeam(frameEntity.getEntityName(), team);
-
-                    frameEntity.addCommandTag("invisibleframe");
-
-                    if (frameEntity.canStayAttached()) {
-                        if (!world.isClient) {
-                            frameEntity.onPlace();
-                            world.emitGameEvent(playerEntity, GameEvent.ENTITY_PLACE, frameEntity.getPos());
-                            world.spawnEntity(frameEntity);
-                        }
-
-                        itemStack.decrement(1);
-                        cir.setReturnValue(ActionResult.success(world.isClient));
-                    } else {
-                        cir.setReturnValue(ActionResult.CONSUME);
-                    }
+                    itemStack.decrement(1);
+                    cir.setReturnValue(ActionResult.success(world.isClient));
+                } else {
+                    cir.setReturnValue(ActionResult.CONSUME);
                 }
             }
         } catch (Exception e) {

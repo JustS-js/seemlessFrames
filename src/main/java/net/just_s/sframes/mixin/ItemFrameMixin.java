@@ -1,8 +1,12 @@
 package net.just_s.sframes.mixin;
 
 import net.just_s.sframes.SFramesMod;
+import net.minecraft.component.ComponentType;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.effect.StatusEffects;
@@ -44,7 +48,7 @@ public class ItemFrameMixin {
 				if (itemStackInHand.getItem().getTranslationKey().equals("item.minecraft.shears") && !frame.isInvisible() && frame.getScoreboardTeam() == null) {
 					if (!player.isCreative() && SFramesMod.CONFIG.doShearsBreak) {
 						if (itemStackInHand.getDamage() < 237) {
-							itemStackInHand.damage(1, Random.create(), player.getServer().getPlayerManager().getPlayer(player.getUuid()));
+							itemStackInHand.damage(1, player, EquipmentSlot.MAINHAND);
 						} else {
 							itemStackInHand.decrement(1);
 						}
@@ -73,7 +77,7 @@ public class ItemFrameMixin {
 					));
 
 					Team team = frame.getWorld().getScoreboard().getTeam("SeamlessFrames");
-					frame.getWorld().getScoreboard().addPlayerToTeam(frame.getEntityName(), team);
+					frame.getWorld().getScoreboard().addScoreHolderToTeam(frame.getNameForScoreboard(), team);
 
 					frame.addCommandTag("invisibleframe");
 
@@ -102,7 +106,7 @@ public class ItemFrameMixin {
 //							frame.getId(), StatusEffects.GLOWING
 //					));
 
-					frame.removeScoreboardTag("invisibleframe");
+					frame.removeCommandTag("invisibleframe");
 
 					SFramesMod.sendPackets((ServerPlayerEntity) player, new ParticleS2CPacket(
 							ParticleTypes.CRIT,
@@ -123,9 +127,9 @@ public class ItemFrameMixin {
 								public void run() {
 									try {
 										Team team = frame.getWorld().getScoreboard().getTeam("SeamlessFrames");
-										frame.getWorld().getScoreboard().removePlayerFromTeam(frame.getEntityName(), team);
+										frame.getWorld().getScoreboard().removeScoreHolderFromTeam(frame.getNameForScoreboard(), team);
 									} catch (Exception e) {
-										SFramesMod.LOGGER.warn(player.getEntityName() + " interacted with vanilla invisible frame. Suppressing errors...");
+										SFramesMod.LOGGER.warn(player.getNameForScoreboard() + " interacted with vanilla invisible frame. Suppressing errors...");
 									}
 								}
 							},
@@ -158,12 +162,13 @@ public class ItemFrameMixin {
 			ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
 			if (frame.getCommandTags().contains("invisibleframe")) {
 				ItemStack item = cir.getReturnValue();
-				item.setCustomName(Text.of("Невидимая рамка"));
-				item.addEnchantment(Enchantments.UNBREAKING, 1);
-				item.addHideFlag(ItemStack.TooltipSection.ENCHANTMENTS);
+				item.set(DataComponentTypes.ITEM_NAME, Text.of("Невидимая рамка"));
+				item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
 
-				NbtCompound nbt = item.getOrCreateNbt();
+				NbtComponent nbtCompound = item.get(DataComponentTypes.CUSTOM_DATA);
+				NbtCompound nbt = (nbtCompound == null) ? NbtComponent.DEFAULT.copyNbt() : nbtCompound.copyNbt();
 				nbt.putBoolean("invisibleframe", true);
+				item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
 
 				cir.setReturnValue(item);
 			}

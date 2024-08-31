@@ -94,7 +94,7 @@ public class FrameCommand {
             strValue = "§6" + value;
         }
         if (Objects.equals(name, "color")) {
-            String colorName = SFramesMod.CONFIG.playerColor.get(commandSource.getPlayer().getEntityName());
+            String colorName = SFramesMod.CONFIG.playerColor.get(commandSource.getPlayer().getNameForScoreboard());
             strValue = colorName != null ? Formatting.byName(colorName).toString() + colorName : "§fno custom color";
         }
         if (Objects.equals(name, "baseColor")) {
@@ -106,17 +106,14 @@ public class FrameCommand {
 
     private static int executeColor(ServerCommandSource commandSource, Formatting color) {
         ServerPlayerEntity player = commandSource.getPlayer();
-        SFramesMod.CONFIG.playerColor.put(player.getEntityName(), color.asString());
+        SFramesMod.CONFIG.playerColor.put(player.getNameForScoreboard(), color.asString());
 
         Team team = player.getServer().getScoreboard().getTeam("SeamlessFrames");
-        SerializableTeam serializableTeam = new SerializableTeam(team, Formatting.byName(SFramesMod.CONFIG.playerColor.get(player.getEntityName())));
-
-        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
-        buf.writeString(team.getName());
-        buf.writeByte(2);
-        serializableTeam.write(buf);
-
-        SFramesMod.sendPackets(player, new TeamS2CPacket(buf));
+        Formatting baseColor = team.getColor();
+        team.setColor(Formatting.byName(SFramesMod.CONFIG.playerColor.get(player.getNameForScoreboard())));
+        TeamS2CPacket packet = TeamS2CPacket.updateTeam(team, false);
+        team.setColor(baseColor);
+        SFramesMod.sendPackets(player, packet);
 
         SFramesMod.CONFIG.dumpJson();
         return 1;

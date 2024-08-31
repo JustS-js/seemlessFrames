@@ -2,9 +2,9 @@ package net.just_s.sframes.mixin;
 
 import io.netty.buffer.Unpooled;
 import net.just_s.sframes.SFramesMod;
-import net.just_s.sframes.SerializableTeam;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
+import net.minecraft.entity.decoration.BlockAttachedEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
@@ -17,6 +17,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Box;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -26,20 +27,21 @@ import java.util.List;
 
 import static net.just_s.sframes.SFramesMod.generateGlowPacket;
 
-@Mixin(AbstractDecorationEntity.class)
+@Mixin(BlockAttachedEntity.class)
 public abstract class GlowingTickMixin {
+    @Unique
     private int tick = 0;
 
     @Inject(at = @At("HEAD"), method = "tick")
     private void inject(CallbackInfo ci) {
         try {
             //if (SFramesMod.CONFIG.clientSideGlowing) return;
-            AbstractDecorationEntity frame = (AbstractDecorationEntity) (Object) this;
+            BlockAttachedEntity frame = (BlockAttachedEntity) (Object) this;
             if (!(frame instanceof ItemFrameEntity && SFramesMod.shouldGlow((ItemFrameEntity) frame))) return;
 
             List<Entity> entities = frame.getEntityWorld().getOtherEntities(null, new Box(
-                    frame.getBlockPos().add(SFramesMod.CONFIG.radiusOfGlowing + 1, SFramesMod.CONFIG.radiusOfGlowing + 1, SFramesMod.CONFIG.radiusOfGlowing + 1),
-                    frame.getBlockPos().add(-1 * SFramesMod.CONFIG.radiusOfGlowing, -1 * SFramesMod.CONFIG.radiusOfGlowing, -1 * SFramesMod.CONFIG.radiusOfGlowing)
+                    frame.getPos().add(SFramesMod.CONFIG.radiusOfGlowing + 1, SFramesMod.CONFIG.radiusOfGlowing + 1, SFramesMod.CONFIG.radiusOfGlowing + 1),
+                    frame.getPos().add(-1 * SFramesMod.CONFIG.radiusOfGlowing, -1 * SFramesMod.CONFIG.radiusOfGlowing, -1 * SFramesMod.CONFIG.radiusOfGlowing)
             ));
 
             List<ServerPlayerEntity> players = (List<ServerPlayerEntity>) frame.getWorld().getPlayers();
@@ -60,15 +62,12 @@ public abstract class GlowingTickMixin {
                         } else
                             serverSideTickGlow(frame);
                         // Send Custom Color of frame
-                        if (SFramesMod.CONFIG.playerColor.containsKey(entity.getEntityName())) {
-                            SerializableTeam serializableTeam = new SerializableTeam(team, Formatting.byName(SFramesMod.CONFIG.playerColor.get(entity.getEntityName())));
-
-                            PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
-                            buf.writeString(team.getName());
-                            buf.writeByte(2);
-                            serializableTeam.write(buf);
-
-                            SFramesMod.sendPackets((ServerPlayerEntity) entity, new TeamS2CPacket(buf));
+                        if (SFramesMod.CONFIG.playerColor.containsKey(entity.getNameForScoreboard())) {
+                            Formatting baseColor = team.getColor();
+                            team.setColor(Formatting.byName(SFramesMod.CONFIG.playerColor.get(entity.getNameForScoreboard())));
+                            TeamS2CPacket packet = TeamS2CPacket.updateTeam(team, false);
+                            team.setColor(baseColor);
+                            SFramesMod.sendPackets((ServerPlayerEntity)entity, packet);
                         }
                     }
                 }

@@ -1,6 +1,13 @@
 package net.just_s.sframes.mixin;
 
 import net.just_s.sframes.SFramesMod;
+import net.minecraft.component.ComponentHolder;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.EnchantmentEffectComponentTypes;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.component.type.NbtComponent;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.decoration.GlowItemFrameEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
@@ -21,12 +28,13 @@ public class GlowingItemFrameMixin {
             ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
             if (frame.getCommandTags().contains("invisibleframe")) {
                 ItemStack item = cir.getReturnValue();
-                item.setCustomName(Text.of("Невидимая светящаяся рамка"));
-                item.addEnchantment(Enchantments.UNBREAKING, 1);
-                item.addHideFlag(ItemStack.TooltipSection.ENCHANTMENTS);
+                item.set(DataComponentTypes.ITEM_NAME, Text.of("Невидимая светящаяся рамка"));
+                item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
 
-                NbtCompound nbt = item.getOrCreateNbt();
+                NbtComponent nbtCompound = item.get(DataComponentTypes.CUSTOM_DATA);
+                NbtCompound nbt = (nbtCompound == null) ? NbtComponent.DEFAULT.copyNbt() : nbtCompound.copyNbt();
                 nbt.putBoolean("invisibleframe", true);
+                item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
 
                 cir.setReturnValue(item);
             }

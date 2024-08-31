@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -49,54 +50,32 @@ public class SFramesMod implements ModInitializer {
 	public static EntityTrackerUpdateS2CPacket generateGlowPacket(ItemFrameEntity frame, boolean shouldGlow) {
 		DataTracker tracker = frame.getDataTracker();
 		List<DataTracker.Entry<?>> trackedValues = getAllEntries(tracker);
-
+		List<DataTracker.SerializedEntry<?>> serializedEntryList = new ArrayList<>();
+		boolean wasModified = false;
 		for (DataTracker.Entry<?> entry : trackedValues) {
-			if (entry.get().getClass() == Byte.class) {
+			if (entry.get().getClass() == Byte.class && !wasModified) {
 				DataTracker.Entry<Byte> byteEntry = (DataTracker.Entry<Byte>) entry;
 				if (shouldGlow)
 					byteEntry.set((byte) ((byte)entry.get() | 1 << 6));
 				else
 					byteEntry.set((byte) ((byte)entry.get() & ~(1 << 6)));
-				break;
+				wasModified = true;
 			}
+			serializedEntryList.add(entry.toSerialized());
 		}
+		//LOGGER.info(serializedEntryList.toString());
 
-		PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
-		buf.writeVarInt(frame.getId());
-		for (DataTracker.Entry<?> entry : trackedValues) {
-			writeEntryToPacket(buf, entry);
-		}
-		buf.writeByte(255);
-
-		return new EntityTrackerUpdateS2CPacket(buf);
+		return new EntityTrackerUpdateS2CPacket(frame.getId(), serializedEntryList);
 	}
 
 	@Nullable
 	private static List<DataTracker.Entry<?>> getAllEntries(DataTracker tracker) {
-		List<DataTracker.Entry<?>> list = null;
-		((AccessDataTrackerEntries)tracker).getLock().readLock().lock();
+		List<DataTracker.Entry<?>> list = Lists.newArrayList();
 
-		DataTracker.Entry entry;
-		for(ObjectIterator var2 = ((AccessDataTrackerEntries)tracker).getEntries().values().iterator(); var2.hasNext(); list.add(new DataTracker.Entry(entry.getData(), entry.getData().getType().copy(entry.get())))) {
-			entry = (DataTracker.Entry)var2.next();
-			if (list == null) {
-				list = Lists.newArrayList();
-			}
+		for (DataTracker.Entry entry : ((AccessDataTrackerEntries)tracker).getEntries()) {
+			list.add(new DataTracker.Entry(entry.getData(), entry.getData().dataType().copy(entry.get())));
 		}
 
-		((AccessDataTrackerEntries)tracker).getLock().readLock().unlock();
-		return list;
-	}
-
-	private static <T> void writeEntryToPacket(PacketByteBuf buf, DataTracker.Entry<T> entry) {
-		TrackedData<T> trackedData = entry.getData();
-		int i = TrackedDataHandlerRegistry.getId(trackedData.getType());
-		if (i < 0) {
-			LOGGER.error("Unknown serializer type " + trackedData.getType());
-		} else {
-			buf.writeByte(trackedData.getId());
-			buf.writeVarInt(i);
-			trackedData.getType().write(buf, entry.get());
-		}
+		return list.isEmpty() ? null : list;
 	}
 }
