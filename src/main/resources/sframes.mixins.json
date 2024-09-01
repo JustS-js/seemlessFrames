@@ -9,8 +9,7 @@
     "DecorationItemMixin",
     "GlowingItemFrameMixin",
     "GlowingTickMixin",
-    "ItemFrameMixin",
-    "ServerStartMixin"
+    "ItemFrameMixin"
   ],
   "client": [
   ],

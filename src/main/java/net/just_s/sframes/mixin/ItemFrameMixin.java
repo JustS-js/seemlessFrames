@@ -1,191 +1,158 @@
 package net.just_s.sframes.mixin;
 
+import net.just_s.sframes.ItemFrameScheduledPacketAccess;
 import net.just_s.sframes.SFramesMod;
-import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
-import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.ParticleS2CPacket;
-import net.minecraft.network.packet.s2c.play.RemoveEntityStatusEffectS2CPacket;
 import net.minecraft.particle.ParticleTypes;
-import net.minecraft.scoreboard.Team;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.random.Random;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.List;
-
-import static net.just_s.sframes.SFramesMod.generateGlowPacket;
-
 
 @Mixin(ItemFrameEntity.class)
 public class ItemFrameMixin {
 	@Inject(at = @At("HEAD"), method = "damage", cancellable = true)
-	private void injectDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
-		try {
-			if (source.getAttacker().isPlayer()) {
-				PlayerEntity player = (PlayerEntity) source.getAttacker();
-				ItemStack itemStackInHand = player.getInventory().getStack(player.getInventory().selectedSlot);
+	private void sframes$onItemFrameDamageWithTool(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+		Entity attacker = source.getAttacker();
+		if (attacker == null || !attacker.isPlayer()) return;
 
-				ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
-				if (itemStackInHand.getItem().getTranslationKey().equals("item.minecraft.shears") && !frame.isInvisible() && frame.getScoreboardTeam() == null) {
-					if (!player.isCreative() && SFramesMod.CONFIG.doShearsBreak) {
-						if (itemStackInHand.getDamage() < 237) {
-							itemStackInHand.damage(1, player, EquipmentSlot.MAINHAND);
-						} else {
-							itemStackInHand.decrement(1);
-						}
+		ServerPlayerEntity player = (ServerPlayerEntity) attacker;
+		ItemStack itemStackInHand = player.getInventory().getStack(player.getInventory().selectedSlot);
 
-					}
-					frame.getWorld().playSound(
-							null,
-							frame.getBlockPos(),
-							SoundEvents.ENTITY_SNOW_GOLEM_SHEAR,
-							SoundCategory.NEUTRAL,
-							1f,
-							1.5f
-					);
-
-					SFramesMod.sendPackets((ServerPlayerEntity) player, new ParticleS2CPacket(
-							ParticleTypes.CLOUD,
-							false,
-							frame.getX(),
-							frame.getY(),
-							frame.getZ(),
-							0f,
-							0f,
-							0f,
-							0.1f,
-							3
-					));
-
-					Team team = frame.getWorld().getScoreboard().getTeam("SeamlessFrames");
-					frame.getWorld().getScoreboard().addScoreHolderToTeam(frame.getNameForScoreboard(), team);
-
-					frame.addCommandTag("invisibleframe");
-
-					if (!frame.getHeldItemStack().isEmpty()) {
-						frame.setInvisible(true);
-					}
-
-					cir.setReturnValue(true);
-					cir.cancel();
-				}
-				if (itemStackInHand.getItem().getTranslationKey().equals("item.minecraft.leather") && (frame.isInvisible() || SFramesMod.shouldGlow(frame)) && SFramesMod.CONFIG.fixWithLeather) {
-					if (!player.isCreative()) {itemStackInHand.decrement(1);}
-					frame.getWorld().playSound(
-							null,
-							frame.getBlockPos(),
-							SoundEvents.ENTITY_ITEM_FRAME_PLACE,
-							SoundCategory.NEUTRAL,
-							1f,
-							1.5f
-					);
-
-					frame.setInvisible(false);
-					frame.setGlowing(false);
-					SFramesMod.sendPackets((List<ServerPlayerEntity>) player.getWorld().getPlayers(), generateGlowPacket(frame, false));
-//					SFramesMod.sendPackets((List<ServerPlayerEntity>) player.getWorld().getPlayers(), new RemoveEntityStatusEffectS2CPacket(
-//							frame.getId(), StatusEffects.GLOWING
-//					));
-
-					frame.removeCommandTag("invisibleframe");
-
-					SFramesMod.sendPackets((ServerPlayerEntity) player, new ParticleS2CPacket(
-							ParticleTypes.CRIT,
-							false,
-							frame.getX(),
-							frame.getY(),
-							frame.getZ(),
-							0.3f,
-							0.3f,
-							0.3f,
-							0.1f,
-							10
-					));
-
-					new java.util.Timer().schedule(
-							new java.util.TimerTask() {
-								@Override
-								public void run() {
-									try {
-										Team team = frame.getWorld().getScoreboard().getTeam("SeamlessFrames");
-										frame.getWorld().getScoreboard().removeScoreHolderFromTeam(frame.getNameForScoreboard(), team);
-									} catch (Exception e) {
-										SFramesMod.LOGGER.warn(player.getNameForScoreboard() + " interacted with vanilla invisible frame. Suppressing errors...");
-									}
-								}
-							},
-							100
-					);
-
-					cir.setReturnValue(true);
-					cir.cancel();
-				}
-			}
-		} catch (Exception e) {
-			SFramesMod.LOGGER.error("SFrames error on ItemFrameMixin.damage(): " + e);
+		if (itemStackInHand.isOf(Items.SHEARS) && this.applyShears(itemStackInHand, player)) {
+			cir.setReturnValue(true);
+		} else if (itemStackInHand.isOf(Items.LEATHER) && this.applyLeather(itemStackInHand, player)) {
+			cir.setReturnValue(true);
 		}
 	}
 
 	@Inject(at = @At("RETURN"), method = "interact")
-	private void injectInteract(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
+	private void sframes$onPlacingItem(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
 		updateState();
 	}
 
 	@Inject(at = @At("RETURN"), method = "dropHeldStack")
-	private void injectDropItem(Entity entity, boolean alwaysDrop, CallbackInfo ci) {
+	private void sframes$onDroppingHoldingItem(Entity entity, boolean alwaysDrop, CallbackInfo ci) {
 		updateState();
 	}
 
 	@Inject(at = @At("TAIL"), method = "getAsItemStack", cancellable = true)
-	private void injectAsItem(CallbackInfoReturnable<ItemStack> cir) {
-		try {
-			if (!SFramesMod.CONFIG.fixWithLeather) return;
-			ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
-			if (frame.getCommandTags().contains("invisibleframe")) {
-				ItemStack item = cir.getReturnValue();
-				item.set(DataComponentTypes.ITEM_NAME, Text.of("Невидимая рамка"));
-				item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+	private void sframes$onDroppingAsItem(CallbackInfoReturnable<ItemStack> cir) {
+		// If players can't fix item frames with leather, we should drop vanilla frames
+		if (!SFramesMod.CONFIG.getData().fixWithLeather()) return;
 
-				NbtComponent nbtCompound = item.get(DataComponentTypes.CUSTOM_DATA);
-				NbtCompound nbt = (nbtCompound == null) ? NbtComponent.DEFAULT.copyNbt() : nbtCompound.copyNbt();
-				nbt.putBoolean("invisibleframe", true);
-				item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+		ItemFrameEntity itemFrame = ((ItemFrameEntity)(Object)this);
+		if (!SFramesMod.isFrameInTeam(itemFrame)) return;
 
-				cir.setReturnValue(item);
-			}
-		} catch (Exception e) {
-			SFramesMod.LOGGER.error("SFrames error on ItemFrameMixin.getAsItemStack(): " + e);
+		ItemStack item = cir.getReturnValue();
+		item.set(DataComponentTypes.ITEM_NAME, Text.of(SFramesMod.CONFIG.getData().invisibleItemFrameName()));
+		item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+
+		NbtCompound nbt = new NbtCompound();
+		nbt.putBoolean("invisibleframe", true);
+		item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+
+		cir.setReturnValue(item);
+	}
+
+	@Unique
+	private void updateState() {
+		ItemFrameEntity itemFrame = ((ItemFrameEntity)(Object)this);
+		if (!SFramesMod.isFrameInTeam(itemFrame)) return;
+
+		itemFrame.setInvisible(!itemFrame.getHeldItemStack().isEmpty());
+
+		if (SFramesMod.CONFIG.getData().clientSideGlowing()) {
+			((ItemFrameScheduledPacketAccess)itemFrame).sframes$shedulePacket();
+		} else {
+			itemFrame.setGlowing(SFramesMod.shouldGlow(itemFrame));
 		}
 	}
 
-	private void updateState() {
-		try {
-			ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
-			if (frame.getCommandTags().contains("invisibleframe")) {
-				frame.setInvisible(!frame.getHeldItemStack().isEmpty());
-			}
-			if (!SFramesMod.shouldGlow(frame) && frame.isGlowing()) frame.setGlowing(false);
-		} catch (Exception e) {
-			SFramesMod.LOGGER.error("SFrames error on ItemFrameMixin.updateState(): " + e);
+	@Unique
+	private boolean applyShears(ItemStack itemStackInHand, ServerPlayerEntity player) {
+		ItemFrameEntity itemFrame = (ItemFrameEntity)(Object)this;
+
+		if (SFramesMod.isFrameInTeam(itemFrame)) return false;
+
+		SFramesMod.addFrameToTeam(itemFrame);
+
+		itemFrame.getWorld().playSound(
+				null,
+				itemFrame.getBlockPos(),
+				SoundEvents.ENTITY_SNOW_GOLEM_SHEAR,
+				SoundCategory.NEUTRAL,
+				1f,
+				1.5f
+		);
+
+		SFramesMod.sendPacket(player, new ParticleS2CPacket(
+				ParticleTypes.CLOUD,
+				false,
+				itemFrame.getX(),
+				itemFrame.getY(),
+				itemFrame.getZ(),
+				0f,
+				0f,
+				0f,
+				0.1f,
+				3
+		));
+
+		if (SFramesMod.CONFIG.getData().doShearsBreak()) {
+			itemStackInHand.damage(1, player, EquipmentSlot.MAINHAND);
 		}
+
+		itemFrame.setGlowing(!SFramesMod.CONFIG.getData().clientSideGlowing() && SFramesMod.shouldGlow(itemFrame));
+		itemFrame.setInvisible(!itemFrame.getHeldItemStack().isEmpty());
+		SFramesMod.sendPackets(SFramesMod.getPlayersNearby(itemFrame), SFramesMod.generateGlowPacket(itemFrame, false));
+
+		return true;
+	}
+
+	@Unique
+	private boolean applyLeather(ItemStack itemStackInHand, ServerPlayerEntity player) {
+		ItemFrameEntity itemFrame = (ItemFrameEntity)(Object)this;
+
+		if (!SFramesMod.CONFIG.getData().fixWithLeather()) return false;
+		if (!SFramesMod.isFrameInTeam(itemFrame)) return false;
+
+		SFramesMod.removeFrameFromTeam(itemFrame);
+
+		itemFrame.getWorld().playSound(
+				null,
+				itemFrame.getBlockPos(),
+				SoundEvents.ENTITY_ITEM_FRAME_PLACE,
+				SoundCategory.NEUTRAL,
+				1f,
+				1.5f
+		);
+
+		itemStackInHand.decrementUnlessCreative(1, player);
+
+		itemFrame.setGlowing(false);
+		itemFrame.setInvisible(false);
+		SFramesMod.sendPackets(SFramesMod.getPlayersNearby(itemFrame), SFramesMod.generateGlowPacket(itemFrame, false));
+
+		return true;
 	}
 }

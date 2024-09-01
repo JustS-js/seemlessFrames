@@ -22,24 +22,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GlowItemFrameEntity.class)
 public class GlowingItemFrameMixin {
     @Inject(at = @At("TAIL"), method = "getAsItemStack", cancellable = true)
-    private void injectAsItem(CallbackInfoReturnable<ItemStack> cir) {
-        try {
-            if (!SFramesMod.CONFIG.fixWithLeather) return;
-            ItemFrameEntity frame = ((ItemFrameEntity)(Object)this);
-            if (frame.getCommandTags().contains("invisibleframe")) {
-                ItemStack item = cir.getReturnValue();
-                item.set(DataComponentTypes.ITEM_NAME, Text.of("Невидимая светящаяся рамка"));
-                item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+    private void sframes$onDroppingAsItem(CallbackInfoReturnable<ItemStack> cir) {
+        // If players can't fix item frames with leather, we should drop vanilla frames
+        if (!SFramesMod.CONFIG.getData().fixWithLeather()) return;
 
-                NbtComponent nbtCompound = item.get(DataComponentTypes.CUSTOM_DATA);
-                NbtCompound nbt = (nbtCompound == null) ? NbtComponent.DEFAULT.copyNbt() : nbtCompound.copyNbt();
-                nbt.putBoolean("invisibleframe", true);
-                item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+        ItemFrameEntity itemFrame = ((ItemFrameEntity)(Object)this);
+        if (!SFramesMod.isFrameInTeam(itemFrame)) return;
 
-                cir.setReturnValue(item);
-            }
-        } catch (Exception e) {
-            SFramesMod.LOGGER.error("SFrames error on GlowingItemFrameMixin: " + e);
-        }
+        ItemStack item = cir.getReturnValue();
+        item.set(DataComponentTypes.ITEM_NAME, Text.of(SFramesMod.CONFIG.getData().invisibleGlowItemFrameName()));
+        item.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
+
+        NbtCompound nbt = new NbtCompound();
+        nbt.putBoolean("invisibleframe", true);
+        item.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+
+        cir.setReturnValue(item);
     }
 }

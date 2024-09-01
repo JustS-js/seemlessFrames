@@ -3,11 +3,7 @@ package net.just_s.sframes;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import io.netty.buffer.Unpooled;
 import net.minecraft.command.argument.ColorArgumentType;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
-import net.minecraft.scoreboard.Team;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.server.command.ServerCommandSource;
@@ -34,7 +30,7 @@ public class FrameCommand {
                         then(
                                 CommandManager.literal("baseColor").requires((source) -> source.hasPermissionLevel(3)).
                                         executes(
-                                                (context) -> executeShow(context.getSource(), "baseColor", SFramesMod.CONFIG.outlineColor)
+                                                (context) -> executeShow(context.getSource(), "baseColor", SFramesMod.CONFIG.getData().baseColor())
                                         ).
                                         then(
                                         CommandManager.argument("value", ColorArgumentType.color()).executes(
@@ -44,7 +40,7 @@ public class FrameCommand {
                         then(
                                 CommandManager.literal("radius").requires((source) -> source.hasPermissionLevel(3)).
                                         executes(
-                                                (context) -> executeShow(context.getSource(), "radius", SFramesMod.CONFIG.radiusOfGlowing)
+                                                (context) -> executeShow(context.getSource(), "radius", SFramesMod.CONFIG.getData().radiusOfGlowing())
                                         ).
                                         then(
                                         CommandManager.argument("value", IntegerArgumentType.integer(-1, 128)).executes(
@@ -54,7 +50,7 @@ public class FrameCommand {
                         then(
                                 CommandManager.literal("doShearsBreak").requires((source) -> source.hasPermissionLevel(3)).
                                         executes(
-                                                (context) -> executeShow(context.getSource(), "doShearsBreak", SFramesMod.CONFIG.doShearsBreak)
+                                                (context) -> executeShow(context.getSource(), "doShearsBreak", SFramesMod.CONFIG.getData().doShearsBreak())
                                         ).
                                         then(
                                         CommandManager.argument("value", BoolArgumentType.bool()).executes(
@@ -64,7 +60,7 @@ public class FrameCommand {
                         then(
                                 CommandManager.literal("doLeatherFix").requires((source) -> source.hasPermissionLevel(3)).
                                         executes(
-                                                (context) -> executeShow(context.getSource(), "doLeatherFix", SFramesMod.CONFIG.fixWithLeather)
+                                                (context) -> executeShow(context.getSource(), "doLeatherFix", SFramesMod.CONFIG.getData().fixWithLeather())
                                         ).
                                         then(
                                         CommandManager.argument("value", BoolArgumentType.bool()).executes(
@@ -74,7 +70,7 @@ public class FrameCommand {
                         then(
                                 CommandManager.literal("clientSideGlowing").requires((source) -> source.hasPermissionLevel(3)).
                                         executes(
-                                                (context) -> executeShow(context.getSource(), "clientSideGlowing", SFramesMod.CONFIG.clientSideGlowing)
+                                                (context) -> executeShow(context.getSource(), "clientSideGlowing", SFramesMod.CONFIG.getData().clientSideGlowing())
                                         ).
                                         then(
                                         CommandManager.argument("value", BoolArgumentType.bool()).executes(
@@ -94,11 +90,17 @@ public class FrameCommand {
             strValue = "§6" + value;
         }
         if (Objects.equals(name, "color")) {
-            String colorName = SFramesMod.CONFIG.playerColor.get(commandSource.getPlayer().getNameForScoreboard());
-            strValue = colorName != null ? Formatting.byName(colorName).toString() + colorName : "§fno custom color";
+            if (commandSource.getPlayer() == null) return 0;
+            ServerPlayerEntity player = commandSource.getPlayer();
+            if (player.getAttachedOrElse(SFramesMod.HAS_COLOR_ATTACHMENT, false)) {
+                Formatting color = player.getAttachedOrElse(SFramesMod.COLOR_ATTACHMENT, SFramesMod.CONFIG.getData().baseColor());
+                strValue = color.toString() + color.getName();
+            } else {
+                strValue = Formatting.WHITE + "not specified";
+            }
         }
         if (Objects.equals(name, "baseColor")) {
-            strValue = Formatting.byName((String) value).toString() + value;
+            strValue = value.toString() + ((Formatting)value).getName();
         }
         commandSource.getPlayer().sendMessage(Text.of("§6[§aSFrames§6] §2value of §b" + name + "§2 > " + strValue));
         return 1;
@@ -106,51 +108,78 @@ public class FrameCommand {
 
     private static int executeColor(ServerCommandSource commandSource, Formatting color) {
         ServerPlayerEntity player = commandSource.getPlayer();
-        SFramesMod.CONFIG.playerColor.put(player.getNameForScoreboard(), color.asString());
+        if (player == null) return 0;
+        player.setAttached(SFramesMod.COLOR_ATTACHMENT, color);
+        player.setAttached(SFramesMod.HAS_COLOR_ATTACHMENT, true);
 
-        Team team = player.getServer().getScoreboard().getTeam("SeamlessFrames");
-        Formatting baseColor = team.getColor();
-        team.setColor(Formatting.byName(SFramesMod.CONFIG.playerColor.get(player.getNameForScoreboard())));
-        TeamS2CPacket packet = TeamS2CPacket.updateTeam(team, false);
-        team.setColor(baseColor);
-        SFramesMod.sendPackets(player, packet);
-
-        SFramesMod.CONFIG.dumpJson();
+        SFramesMod.sendPacket(player, SFramesMod.generateColorPacket(player));
+        executeShow(commandSource, "color", color);
+        SFramesMod.CONFIG.dump();
         return 1;
     }
 
     private static int executeBaseColor(ServerCommandSource commandSource, Formatting color) {
-        SFramesMod.CONFIG.outlineColor = color.asString();
-        commandSource.getServer().getScoreboard().getTeam("SeamlessFrames").setColor(Formatting.byName(SFramesMod.CONFIG.outlineColor));
-        executeShow(commandSource, "baseColor", SFramesMod.CONFIG.outlineColor);
+        SFramesMod.CONFIG.setData(
+                color,
+                SFramesMod.CONFIG.getData().radiusOfGlowing(),
+                SFramesMod.CONFIG.getData().clientSideGlowing(),
+                SFramesMod.CONFIG.getData().doShearsBreak(),
+                SFramesMod.CONFIG.getData().fixWithLeather()
+        );
+        SFramesMod.getTeam().setColor(color);
+        executeShow(commandSource, "baseColor", color);
         SFramesMod.CONFIG.dump();
         return 1;
     }
 
     private static int executeRadius(ServerCommandSource commandSource, int value) {
-        SFramesMod.CONFIG.radiusOfGlowing = value;
-        executeShow(commandSource, "radius", SFramesMod.CONFIG.radiusOfGlowing);
-        SFramesMod.CONFIG.dump();
-        return 1;
-    }
-
-    private static int executeDoShearsBreak(ServerCommandSource commandSource, boolean value) {
-        SFramesMod.CONFIG.doShearsBreak = value;
-        executeShow(commandSource, "doShearsBreak", SFramesMod.CONFIG.doShearsBreak);
-        SFramesMod.CONFIG.dump();
-        return 1;
-    }
-
-    private static int executeDoLeatherFix(ServerCommandSource commandSource, boolean value) {
-        SFramesMod.CONFIG.fixWithLeather = value;
-        executeShow(commandSource, "doLeatherFix", SFramesMod.CONFIG.fixWithLeather);
+        SFramesMod.CONFIG.setData(
+                SFramesMod.CONFIG.getData().baseColor(),
+                value,
+                SFramesMod.CONFIG.getData().clientSideGlowing(),
+                SFramesMod.CONFIG.getData().doShearsBreak(),
+                SFramesMod.CONFIG.getData().fixWithLeather()
+        );
+        executeShow(commandSource, "radius", value);
         SFramesMod.CONFIG.dump();
         return 1;
     }
 
     private static int executeClientSideGlowing(ServerCommandSource commandSource, boolean value) {
-        SFramesMod.CONFIG.clientSideGlowing = value;
-        executeShow(commandSource, "clientSideGlowing", SFramesMod.CONFIG.clientSideGlowing);
+        SFramesMod.CONFIG.setData(
+                SFramesMod.CONFIG.getData().baseColor(),
+                SFramesMod.CONFIG.getData().radiusOfGlowing(),
+                value,
+                SFramesMod.CONFIG.getData().doShearsBreak(),
+                SFramesMod.CONFIG.getData().fixWithLeather()
+        );
+        executeShow(commandSource, "clientSideGlowing", value);
+        SFramesMod.CONFIG.dump();
+        return 1;
+    }
+
+    private static int executeDoShearsBreak(ServerCommandSource commandSource, boolean value) {
+        SFramesMod.CONFIG.setData(
+                SFramesMod.CONFIG.getData().baseColor(),
+                SFramesMod.CONFIG.getData().radiusOfGlowing(),
+                SFramesMod.CONFIG.getData().clientSideGlowing(),
+                value,
+                SFramesMod.CONFIG.getData().fixWithLeather()
+        );
+        executeShow(commandSource, "doShearsBreak", value);
+        SFramesMod.CONFIG.dump();
+        return 1;
+    }
+
+    private static int executeDoLeatherFix(ServerCommandSource commandSource, boolean value) {
+        SFramesMod.CONFIG.setData(
+                SFramesMod.CONFIG.getData().baseColor(),
+                SFramesMod.CONFIG.getData().radiusOfGlowing(),
+                SFramesMod.CONFIG.getData().clientSideGlowing(),
+                SFramesMod.CONFIG.getData().doShearsBreak(),
+                value
+        );
+        executeShow(commandSource, "doLeatherFix", value);
         SFramesMod.CONFIG.dump();
         return 1;
     }
