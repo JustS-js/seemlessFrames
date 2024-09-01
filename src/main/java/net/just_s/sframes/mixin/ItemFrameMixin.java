@@ -33,7 +33,7 @@ public class ItemFrameMixin {
 	@Inject(at = @At("HEAD"), method = "damage", cancellable = true)
 	private void sframes$onItemFrameDamageWithTool(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		Entity attacker = source.getAttacker();
-		if (attacker == null || !attacker.isPlayer()) return;
+		if (attacker == null || !attacker.isPlayer() || attacker.getWorld().isClient()) return;
 
 		ServerPlayerEntity player = (ServerPlayerEntity) attacker;
 		ItemStack itemStackInHand = player.getInventory().getStack(player.getInventory().selectedSlot);
