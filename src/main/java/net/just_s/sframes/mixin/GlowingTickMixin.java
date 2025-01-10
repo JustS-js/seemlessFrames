@@ -1,16 +1,9 @@
 package net.just_s.sframes.mixin;
 
-import io.netty.buffer.Unpooled;
 import net.just_s.sframes.SFramesMod;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.entity.decoration.BlockAttachedEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.network.packet.s2c.play.EntityStatusEffectS2CPacket;
-import net.minecraft.network.packet.s2c.play.RemoveEntityStatusEffectS2CPacket;
 import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.network.ServerPlayerEntity;

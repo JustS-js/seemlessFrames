@@ -79,7 +79,7 @@ public class DecorationItemMixin {
                     }
 
                     itemStack.decrement(1);
-                    cir.setReturnValue(ActionResult.success(world.isClient));
+                    cir.setReturnValue(ActionResult.SUCCESS);
                 } else {
                     cir.setReturnValue(ActionResult.CONSUME);
                 }

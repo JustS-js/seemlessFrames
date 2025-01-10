@@ -1,8 +1,6 @@
 package net.just_s.sframes.mixin;
 
-import io.netty.buffer.Unpooled;
 import net.just_s.sframes.SFramesMod;
-import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.packet.s2c.play.TeamS2CPacket;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.network.ServerPlayerEntity;

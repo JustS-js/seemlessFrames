@@ -1,29 +1,25 @@
 package net.just_s.sframes.mixin;
 
 import net.just_s.sframes.SFramesMod;
-import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
-import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.ParticleS2CPacket;
-import net.minecraft.network.packet.s2c.play.RemoveEntityStatusEffectS2CPacket;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.random.Random;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -32,13 +28,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
+import static net.just_s.sframes.SFramesMod.LOGGER;
 import static net.just_s.sframes.SFramesMod.generateGlowPacket;
 
 
 @Mixin(ItemFrameEntity.class)
 public class ItemFrameMixin {
 	@Inject(at = @At("HEAD"), method = "damage", cancellable = true)
-	private void injectDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+	private void injectDamage(ServerWorld world, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		try {
 			if (source.getAttacker().isPlayer()) {
 				PlayerEntity player = (PlayerEntity) source.getAttacker();
@@ -66,6 +63,7 @@ public class ItemFrameMixin {
 					SFramesMod.sendPackets((ServerPlayerEntity) player, new ParticleS2CPacket(
 							ParticleTypes.CLOUD,
 							false,
+							false,
 							frame.getX(),
 							frame.getY(),
 							frame.getZ(),
@@ -88,6 +86,7 @@ public class ItemFrameMixin {
 					cir.setReturnValue(true);
 					cir.cancel();
 				}
+				LOGGER.info(itemStackInHand.getItem().getTranslationKey().equals("item.minecraft.leather") + " | " + frame.isInvisible() + " | "  + SFramesMod.shouldGlow(frame) + " | " + SFramesMod.CONFIG.fixWithLeather);
 				if (itemStackInHand.getItem().getTranslationKey().equals("item.minecraft.leather") && (frame.isInvisible() || SFramesMod.shouldGlow(frame)) && SFramesMod.CONFIG.fixWithLeather) {
 					if (!player.isCreative()) {itemStackInHand.decrement(1);}
 					frame.getWorld().playSound(
@@ -110,6 +109,7 @@ public class ItemFrameMixin {
 
 					SFramesMod.sendPackets((ServerPlayerEntity) player, new ParticleS2CPacket(
 							ParticleTypes.CRIT,
+							false,
 							false,
 							frame.getX(),
 							frame.getY(),
@@ -151,7 +151,7 @@ public class ItemFrameMixin {
 	}
 
 	@Inject(at = @At("RETURN"), method = "dropHeldStack")
-	private void injectDropItem(Entity entity, boolean alwaysDrop, CallbackInfo ci) {
+	private void injectDropItem(ServerWorld world, Entity entity, boolean dropSelf, CallbackInfo ci) {
 		updateState();
 	}
 
